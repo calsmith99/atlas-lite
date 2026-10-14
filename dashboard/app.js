@@ -249,6 +249,7 @@ function communities(n, L, deg) {
 // Force layout constrained to the sphere: every note repels every other, links pull together, and each group
 // starts in its own patch of sky so it settles as a constellation. A link's pull is shared out over its ends'
 // links, so hubs sit between their groups instead of dragging every group onto themselves. Seeded, so it's stable.
+const BIG_GRAPH = 800, GRID_CELL = 0.25;
 function layout(graph) {
   const L = graph.links.map((l) => [index.get(l.source), index.get(l.target)]).filter(([a, b]) => a != null && b != null && a !== b);
   const deg = new Array(graph.nodes.length).fill(0);
@@ -273,11 +274,31 @@ function layout(graph) {
   for (let it = 0; it < 400; it++) {
     const cool = 1 - it / 400;
     F.forEach((f) => f.set(0, 0, 0));
-    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+    const repel = (i, j) => {
       d.subVectors(P[i], P[j]);
       const dist2 = Math.max(d.lengthSq(), 1e-4);
       d.multiplyScalar((label[i] === label[j] ? 0.0012 : 0.0032) / dist2);
       F[i].add(d); F[j].sub(d);
+    };
+    if (P.length <= BIG_GRAPH) {
+      for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) repel(i, j);
+    } else {
+      // all-pairs is n² per pass and froze the page on a ~3,000-node code graph; past BIG_GRAPH only nearby
+      // stars push each other (a 3D grid over the sphere), since the push falls off with distance squared anyway
+      const cell = (v) => Math.floor((v + 1) / GRID_CELL);
+      const key = (x, y, z) => (x * 64 + y) * 64 + z;
+      const grid = new Map();
+      P.forEach((p, i) => {
+        const k = key(cell(p.x), cell(p.y), cell(p.z));
+        (grid.get(k) || grid.set(k, []).get(k)).push(i);
+      });
+      for (let i = 0; i < P.length; i++) {
+        const x = cell(P[i].x), y = cell(P[i].y), z = cell(P[i].z);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+          const near = grid.get(key(x + dx, y + dy, z + dz));
+          if (near) for (const j of near) if (j > i) repel(i, j);
+        }
+      }
     }
     L.forEach(([a, b], k) => {
       d.subVectors(P[b], P[a]).multiplyScalar(pull[k]);
@@ -870,7 +891,7 @@ $("#flip").addEventListener("click", async () => {
   const next = all[(all.findIndex((s) => s.id === graphId) + 1) % all.length];
   $("#flip").classList.add("turning");
   setTimeout(() => $("#flip").classList.remove("turning"), 700);
-  try { await loadGraph(next.id); } catch {}
+  try { await loadGraph(next.id); } catch (e) { console.error("flip failed", e); }
 });
 
 // ---------------------------------------------------------------- wiring
