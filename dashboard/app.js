@@ -254,7 +254,11 @@ function layout(graph) {
   const L = graph.links.map((l) => [index.get(l.source), index.get(l.target)]).filter(([a, b]) => a != null && b != null && a !== b);
   const deg = new Array(graph.nodes.length).fill(0);
   L.forEach(([a, b]) => { deg[a]++; deg[b]++; });
-  const label = communities(graph.nodes.length, L, deg);
+  let label;
+  if (graph.group === "folder") {   // pre-grouped graph (e.g. one constellation per repo): skip community detection
+    const ids = new Map();
+    label = graph.nodes.map((n) => { if (!ids.has(n.folder)) ids.set(n.folder, ids.size); return ids.get(n.folder); });
+  } else label = communities(graph.nodes.length, L, deg);
   const size = new Map();
   label.forEach((l) => size.set(l, (size.get(l) || 0) + 1));
   // biggest groups first, spread evenly over the sphere (golden-angle spiral); lone notes go by folder
@@ -522,8 +526,9 @@ const ray = new THREE.Raycaster();
 ray.params.Points.threshold = 3.5;
 const mouse = new THREE.Vector2();
 const tip = $("#tooltip");
+let tipPinned = false;
 renderer.domElement.addEventListener("pointermove", (e) => {
-  if (!stars) return;
+  if (!stars || tipPinned) return;
   const r = renderer.domElement.getBoundingClientRect();
   mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
@@ -538,7 +543,7 @@ renderer.domElement.addEventListener("pointermove", (e) => {
     tip.style.top = e.clientY + 14 + "px";
   } else tip.style.display = "none";
 });
-renderer.domElement.addEventListener("pointerleave", () => (tip.style.display = "none"));
+renderer.domElement.addEventListener("pointerleave", () => { if (!tipPinned) tip.style.display = "none"; });
 let userHold = 0;
 controls.addEventListener("start", () => (userHold = Infinity));
 controls.addEventListener("end", () => (userHold = performance.now() + 6000));
@@ -837,13 +842,35 @@ $("#draft").addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("#composer").requestSubmit(); }
 });
 
-// click a star to open the note in Obsidian
+// click a star: a note opens in Obsidian; a code file lists its functions/classes in the tooltip (click empty sky to close)
 renderer.domElement.addEventListener("click", (e) => {
-  if (!stars || !vaultName || graphId !== "notes") return;
+  if (!stars) return;
   const r = renderer.domElement.getBoundingClientRect();
   mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
   const hit = ray.intersectObject(stars)[0];
+  if (graphId !== "notes") {
+    if (hit && hit.distance < camera.position.length() && nodes[hit.index].symbols) {
+      const n = nodes[hit.index];
+      tip.innerHTML = `<b></b><i></i><ul style="margin:6px 0 0;padding-left:16px;max-height:50vh;overflow:auto"></ul>`;
+      tip.querySelector("b").textContent = n.name;
+      tip.querySelector("i").textContent = `${n.folder}/${n.path}`;
+      const ul = tip.querySelector("ul");
+      for (const s of n.symbols.slice(0, 200)) {
+        const li = document.createElement("li");
+        li.textContent = `${s.label}  ${s.loc}`;
+        ul.append(li);
+      }
+      if (!n.symbols.length) ul.innerHTML = "<li>no functions or classes</li>";
+      tipPinned = true;
+      tip.style.pointerEvents = "auto";
+      tip.style.display = "block";
+      tip.style.left = Math.min(e.clientX + 14, innerWidth - 320) + "px";
+      tip.style.top = Math.min(e.clientY + 14, innerHeight - 300) + "px";
+    } else { tipPinned = false; tip.style.display = "none"; }
+    return;
+  }
+  if (!vaultName) return;
   if (hit && hit.distance < camera.position.length())
     location.href = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(nodes[hit.index].id)}`;
 });
@@ -880,7 +907,7 @@ let graphId = "notes", vaultName = null;
 async function loadGraph(id = graphId) {
   const g = await (await fetch(`/api/graph/${id}`)).json();
   vaultName = g.vault;
-  graphId = id;
+  graphId = id; tipPinned = false; tip.style.display = "none";
   buildGraph(g);
   const src = (config.graphs || []).find((s) => s.id === id);
   $("#flip-name").textContent = src?.label || id;

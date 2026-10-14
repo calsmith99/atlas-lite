@@ -21,7 +21,7 @@ needs internet once for fonts, three.js and marked from CDNs.
 Configuration is by environment variable: `ATLAS_VAULT` (default `~/Atlas Vault`), `ATLAS_PORT` (11700),
 `ATLAS_RECENT_HOURS` (6), `ATLAS_PERMISSION_MODE` (`acceptEdits`; a headless turn cannot ask, so tools beyond
 that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path to the binary),
-`ATLAS_CODE_GRAPH`, `ATLAS_VOICE`. The server listens on 127.0.0.1 only and rejects cross-site requests.
+`ATLAS_CODE_GRAPH`, `ATLAS_CODE_REPOS`, `ATLAS_CODE_CACHE`, `ATLAS_VOICE`. The server listens on 127.0.0.1 only and rejects cross-site requests.
 
 ## Using it
 
@@ -53,5 +53,7 @@ that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path
 `ATLAS_CODE_GRAPH` at a JSON file of that shape (or a Graphify `graph.json`, which is mapped automatically; see [docs/graphify-test.md](docs/graphify-test.md)) and a second globe
 appears behind the flip button. Nodes need `id` and may carry `name`, `folder`, `blurb`; links are
 `{"source": id, "target": id}`.
+
+`ATLAS_CODE_REPOS=/path/a:/path/b` builds one combined code globe (repo = constellation, file = star, click a file for its functions) with `scripts/build_code_graph.py`; see [docs/graphify-test.md](docs/graphify-test.md).
 
 `?graph=<id>` on the page URL opens a given graph first (e.g. `/?graph=code`).

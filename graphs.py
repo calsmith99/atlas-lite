@@ -4,6 +4,10 @@ The globe shows one graph at a time and the page can flip between sources. A sou
 `id`, `label`, and `load() -> {"nodes": [...], "links": [...]}`. Nodes need `id`, `name`; they may carry
 `folder` (colour group), `tags`, `blurb`. Links are `{"source": id, "target": id}`.
 
+A graph may set `"group": "folder"` so the front end makes each folder its own constellation instead of running
+Louvain; link `weight` is optional. Nodes may carry `symbols` (`[{label, loc}]`), listed when the star is clicked.
+The combined multi-repo code graph (scripts/build_code_graph.py, `ATLAS_CODE_REPOS`) uses all of these.
+
 Registered here: the notes vault (always) and an optional code graph read from a JSON file
 (`ATLAS_CODE_GRAPH=/path/graph.json`): either the shape above, or Graphify's `graph.json` (see docs/graphify-test.md),
 which is recognised and mapped automatically. Add a source by subclassing GraphSource and adding it in `build_sources()`.
@@ -147,6 +151,16 @@ class JsonFileSource(GraphSource):
 def build_sources(vault: Path) -> dict[str, GraphSource]:
     sources: dict[str, GraphSource] = {"notes": NotesSource(vault)}
     code = os.environ.get("ATLAS_CODE_GRAPH")
+    repos = os.environ.get("ATLAS_CODE_REPOS")
+    if repos and not code:   # build the combined multi-repo graph (cached; see scripts/build_code_graph.py)
+        import subprocess, sys
+        script = Path(__file__).parent / "scripts" / "build_code_graph.py"
+        cache = Path(os.environ.get("ATLAS_CODE_CACHE", Path(__file__).parent / ".code-cache")).expanduser()
+        try:
+            subprocess.run([sys.executable, str(script), "--cache", str(cache)], check=True, env=os.environ)
+            code = str(cache / "code-graph.json")
+        except (subprocess.CalledProcessError, OSError) as e:
+            print("code graph build failed:", e)
     if code and Path(code).expanduser().is_file():
         sources["code"] = JsonFileSource("code", "Code", Path(code).expanduser())
     return sources
