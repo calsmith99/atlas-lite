@@ -14,6 +14,13 @@ from pathlib import Path
 
 from graphs import NotesSource
 
+_TAG = re.compile(r"^\s*\((?:spoken|typed|sent) via [^)]*\)\s*", re.I)
+
+
+def first_line(text: str) -> str:
+    """A message's first line for a title, minus a leading '(spoken via Atlas)' style tag."""
+    return _TAG.sub("", text.strip()).splitlines()[0][:80] if text.strip() else ""
+
 PROJECTS = Path.home() / ".claude/projects"
 HISTORY = 300          # transcript entries kept per session
 RESULT_CHARS = 600     # tool output kept per result
@@ -105,7 +112,7 @@ class Session:
         new = entries(e, self.notes)
         for ent in new:
             if ent["kind"] == "user" and not self.first:
-                self.first, changed = ent["text"].splitlines()[0][:80], True
+                self.first, changed = first_line(ent["text"]), True
         if new:
             self.open = new[-1]["kind"] in ("user", "tool", "result")
             self.history = (self.history + new)[-HISTORY:]
@@ -191,7 +198,7 @@ class Sessions:
                         if e.get("type") == "user" and not title:
                             c = (e.get("message") or {}).get("content")
                             if isinstance(c, str) and not c.lstrip().startswith("<"):
-                                title = c.splitlines()[0][:80]
+                                title = first_line(c)
                         if title and cwd:
                             break
             except OSError:
