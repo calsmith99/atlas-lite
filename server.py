@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from aiohttp import web
 
 from addons import Addons
+from messages import message, REQUEST_LIMIT
 from driver import Driver
 from graphs import JsonFileSource, build_sources
 from repos import load_repos
@@ -124,10 +125,10 @@ async def new_session(request):
 async def send(request):
     if not same_origin(request):
         raise web.HTTPForbidden()
-    body = await request.json()
-    text = (body.get("text") or "").strip()
-    if not text:
-        return web.json_response({"error": "Nothing to send."}, status=400)
+    try:
+        text = message(await request.json())
+    except ValueError as e:
+        return web.json_response({"error":str(e)}, status=400)
     try:
         await driver.send(request.match_info["id"], text)
     except RuntimeError as e:
@@ -138,12 +139,12 @@ async def send(request):
 async def interrupt(request):
     if not same_origin(request):
         raise web.HTTPForbidden()
-    body = await request.json() if request.can_read_body else {}
-    correction = body.get("text", "") if isinstance(body, dict) else None
-    if not isinstance(correction, str) or len(correction) > 100000:
-        raise web.HTTPBadRequest(text="Invalid correction")
     try:
-        await driver.interrupt(request.match_info["id"], correction.strip())
+        correction = message(await request.json() if request.can_read_body else {}, allow_empty=True)
+    except ValueError as e:
+        return web.json_response({"error":str(e)}, status=400)
+    try:
+        await driver.interrupt(request.match_info["id"], correction)
     except (RuntimeError, OSError) as e:
         return web.json_response({"error": str(e)}, status=409)
     return web.json_response({"ok": True})
@@ -265,7 +266,7 @@ async def start_background(app):
 def main():
     if not VAULT.is_dir():
         raise SystemExit(f"No vault at {VAULT}. Run ./setup.sh first, or set ATLAS_VAULT.")
-    app = web.Application(middlewares=[no_cache])
+    app = web.Application(middlewares=[no_cache], client_max_size=REQUEST_LIMIT)
     app.router.add_get("/", index)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/api/config", config)

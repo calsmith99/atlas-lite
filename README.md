@@ -35,6 +35,10 @@ Configuration is by environment variable: `ATLAS_VAULT` (default `~/Atlas Vault`
   correction in the same session. **Stop** interrupts without a follow-up. Completed actions are not rolled back.
   If Claude does not acknowledge interruption within five seconds, Atlas terminates its process group and resumes
   the correction in a fresh process using the same saved session.
+- **Paste images** directly into the chat box. Thumbnails let you remove them before sending; images can be sent
+  alone, with text, or as a mid-task correction. Draft images remain attached if sending fails and stay with their
+  selected session when you switch conversations. Up to four PNG/JPEG/GIF/WebP images, 4 MB each and 12 MB total;
+  image content goes to Claude as native image blocks and appears in saved conversation history.
 - **Permissions and questions** appear in the shared middle frame. Review the exact tool input before choosing
   **Allow once** or **Deny**. Structured questions support choices and free text. They wait for your answer with no
   timeout and reappear after a page reload. Stopping cancels outstanding requests, so stale buttons cannot approve

@@ -1,5 +1,6 @@
 // Work Atlas dashboard: the work vault as a celestial globe, plus the live conversation of every Claude
 // session on this machine, fed by one WebSocket from dashboard.py. Any session that reads or edits a note lights it.
+import { Attachments } from "./attachments.js";
 import { WorkControls, post } from "./controls.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -643,7 +644,15 @@ function addEntry(e, live, touchNotes = true) {
     div.querySelector(".who").textContent = who;
     const body = div.querySelector(".body");
     if (e.kind === "claude") { body.innerHTML = md(e.text); work.decorate(body, live); }
-    else { body.textContent = e.text; body.style.display = "inline"; }
+    else {
+      body.textContent = e.text || "";
+      for (const source of e.images || []) {
+        const img = document.createElement('img'); img.className = 'sent-image'; img.alt = 'Sent image';
+        img.src = `data:${source.media_type};base64,${source.data}`;
+        img.onclick = () => { const frame = work.artifact('Sent image'); frame.append(img.cloneNode()); };
+        body.append(img);
+      }
+    }
     entriesEl.append(div);
   } else if (e.kind === "tool") {
     const div = document.createElement("div");
@@ -688,6 +697,7 @@ tick();
 const sessions = new Map();                  // id -> meta {id, title, cwd, last, working, driving}
 let shown = null, pinned = false, config = {};
 const submitting = new Set();
+const attachments = new Attachments({session:()=>shown, error:showError, changed:()=>syncComposer()});
 const work = new WorkControls({session: () => shown, meta: () => sessions.get(shown), error: showError, markdown: md});
 
 function ago(t) {
@@ -729,8 +739,9 @@ function syncComposer() {
   const other = m && m.working && !m.driving;
   const busy = m && m.driving;
   $("#draft").disabled = !m || other || !work.connected;
-  $("#send").disabled = $("#draft").disabled || submitting.has(shown);
-  $("#draft").placeholder = !m ? "Start a session below, or pick one" : busy ? "Type a correction to stop and redirect Claude…" : other ? "Another process is driving this session" : "Write to Claude";
+  $("#send").disabled = $("#draft").disabled || submitting.has(shown) || attachments.busy();
+  attachments.render();
+  $("#draft").placeholder = !m ? "Start a session below, or pick one" : busy ? "Type a correction or paste an image to redirect Claude…" : other ? "Another process is driving this session" : "Write to Claude, or paste an image";
   const note = $("#driver-note");
   note.hidden = !(busy || other);
   note.textContent = busy ? "working · corrections interrupt" : "driven elsewhere";
@@ -831,21 +842,24 @@ function showError(text) {
   el.textContent = text || "";
 }
 
-async function sendText(text) {
-  if (!shown || !text.trim() || submitting.has(shown)) return false;
+async function sendText(text, images = []) {
+  if (!shown || (!text.trim() && !images.length) || submitting.has(shown) || attachments.busy()) return false;
   showError("");
   const sid = shown, m = sessions.get(sid);
   submitting.add(sid); syncComposer();
   try {
-    await post(`/api/session/${sid}/${m?.driving ? 'interrupt' : 'send'}`, {text});
+    await post(`/api/session/${sid}/${m?.driving ? 'interrupt' : 'send'}`, images.length ? {text,images:images.map(i=>i.source)} : {text});
     return true;
   } catch(e) { showError(e.message); return false; }
   finally { submitting.delete(sid); syncComposer(); }
 }
 $("#composer").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const text = $("#draft").value;
-  if (await sendText(text)) { if ($("#draft").value === text) $("#draft").value = ""; }
+  const text = $("#draft").value, sid = shown, images = [...attachments.items()];
+  if (await sendText(text, images)) {
+    attachments.clear(sid, images);
+    if (shown === sid && $("#draft").value === text) $("#draft").value = "";
+  }
 });
 $("#draft").addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("#composer").requestSubmit(); }

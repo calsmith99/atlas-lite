@@ -54,12 +54,24 @@ def entries(e: dict, notes: NotesSource) -> list[dict]:
             if content.lstrip().startswith("<"):  # system reminders, command wrappers
                 return []
             return [{"kind": "user", "text": content, "ts": ts}]
+        image_blocks = [b.get("source") for b in content or [] if b.get("type") == "image" and isinstance(b.get("source"), dict)]
+        user_text = "\n".join(b.get("text", "") for b in content or [] if b.get("type") == "text" and not b.get("text", "").lstrip().startswith("<"))
+        if image_blocks:
+            # Do not interpret image contents or put base64 in titles/tool summaries.
+            from messages import image_source
+            images = []
+            for source in image_blocks[:4]:
+                try:
+                    images.append(image_source(source)[0])
+                except ValueError:
+                    continue
+            out.append({"kind":"user", "text":user_text, "images":images, "ts":ts})
         for b in content or []:
             if b.get("type") == "tool_result":
                 text = result_text(b.get("content")).strip()
                 out.append({"kind": "result", "id": b.get("tool_use_id"), "error": bool(b.get("is_error")),
                             "text": text[:RESULT_CHARS], "lines": text.count("\n") + 1 if text else 0, "ts": ts})
-            elif b.get("type") == "text" and not b.get("text", "").lstrip().startswith("<"):
+            elif not image_blocks and b.get("type") == "text" and not b.get("text", "").lstrip().startswith("<"):
                 out.append({"kind": "user", "text": b["text"], "ts": ts})
     elif typ == "assistant":
         for b in content or []:
@@ -113,7 +125,7 @@ class Session:
         new = entries(e, self.notes)
         for ent in new:
             if ent["kind"] == "user" and not self.first:
-                self.first, changed = first_line(ent["text"]), True
+                self.first, changed = first_line(ent["text"]) or "Image conversation", True
         if new:
             self.open = new[-1]["kind"] in ("user", "tool", "result")
             self.history = (self.history + new)[-HISTORY:]

@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from repos import CONFIG, load_repos
+from messages import combine, REQUEST_LIMIT
 
 CONFLICT_SECS = 8
 
@@ -108,7 +109,7 @@ class Driver:
                     raise RuntimeError(f"The session's folder no longer exists: {cwd}")
                 proc = await asyncio.create_subprocess_exec(
                     *self.command(sid, new), cwd=cwd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE, limit=8 * 1024 * 1024, start_new_session=True)
+                    stderr=asyncio.subprocess.PIPE, limit=REQUEST_LIMIT, start_new_session=True)
                 self.running[sid] = proc
                 self._task(self._pump(sid, proc))
                 rid = "init-" + uuid.uuid4().hex
@@ -239,14 +240,14 @@ class Driver:
     def _continue(self, sid):
         pending = self.followups.pop(sid, [])
         if pending and not self.closing:
-            self._task(self._resume_correction(sid, "\n\n".join(pending)))
+            self._task(self._resume_correction(sid, combine(pending)))
 
     async def _resume_correction(self, sid, text):
         try:
             await self.send(sid, text)
         except (RuntimeError, OSError) as ex:
             self._status(sid, "error", "Correction was not sent: " + str(ex))
-            self.broadcast({"t": "turn_end", "session": sid, "error": "Correction was not sent. Your text: " + text + "\n" + str(ex)})
+            self.broadcast({"t": "turn_end", "session": sid, "error": "Correction was not sent. Please send it again. " + str(ex)})
 
     def _clear_permissions(self, sid):
         for rid in self.permissions.pop(sid, {}):

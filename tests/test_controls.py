@@ -1,5 +1,6 @@
 """Exercise real subprocess ordering and HTTP boundaries without a paid Claude turn."""
 import asyncio
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +9,8 @@ from unittest.mock import patch
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from driver import Driver
-from sessions import Session
+from sessions import Session, entries
+from messages import message, combine, MAX_IMAGE
 import server
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +97,31 @@ class Controls(unittest.IsolatedAsyncioTestCase):
         await self.driver.interrupt(self.sid)
         await self.until(lambda:self.sid not in self.driver.busy)
         self.assertIsNone(self.driver.running[other].returncode)
+    async def test_images_reach_claude_as_native_blocks_and_survive_correction(self):
+        source = {'type':'base64','media_type':'image/png','data':'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB68AAAAASUVORK5CYII='}
+        content = message({'text':'Check screenshot', 'images':[source]})
+        await self.driver.send(self.sid, content)
+        await self.until(lambda:self.sid not in self.driver.busy)
+        received = json.loads(next(e['text'] for e in self.events if e['t']=='delta'))
+        self.assertEqual(received[0], {'type':'image','source':source})
+        self.assertEqual(received[1], {'type':'text','text':'Check screenshot'})
+        image_only = message({'images':[source]})
+        await self.driver.send(self.sid, 'hold')
+        await self.driver.interrupt(self.sid, image_only)
+        await self.until(lambda:len([e for e in self.events if e['t']=='delta'])==2)
+        self.assertEqual(json.loads([e['text'] for e in self.events if e['t']=='delta'][-1]), image_only)
+        self.assertEqual(combine(['before',image_only,'after']), [{'type':'text','text':'before'}, *image_only, {'type':'text','text':'after'}])
+        history = entries({'type':'user', 'message':{'content':content}}, None)
+        self.assertEqual(history[0]['images'],[source])
+        self.assertEqual(history[0]['text'],'Check screenshot')
+    async def test_invalid_images_rejected_before_subprocess(self):
+        for body in ({'images':[{'type':'base64','media_type':'image/svg+xml','data':'PHN2Zz4='}]},
+                     {'images':[{'type':'base64','media_type':'image/png','data':'!'}]},
+                     {'images':[{'type':'base64','media_type':'image/png','data':'aGVsbG8='}]},
+                     {'images':[{}]*5}, {'images':'not a list'}, {'text':[]},
+                     {'images':[{'type':'base64','media_type':'image/png','data':'a'*(MAX_IMAGE*2)}]}):
+            with self.assertRaises(ValueError): message(body)
+        self.assertFalse(self.driver.running)
     async def test_native_usage_event(self):
         await self.driver._event(self.sid, {'type':'rate_limit_event', 'rate_limit_info':{'rateLimitType':'five_hour', 'utilization':.25, 'resetsAt':12345}})
         self.assertEqual(self.driver.snapshot()['usageWindows']['five_hour']['utilization'], .25)
@@ -115,6 +142,7 @@ class Controls(unittest.IsolatedAsyncioTestCase):
         app = web.Application()
         app.router.add_post('/api/session/{id}/permission/{rid}', server.answer)
         app.router.add_post('/api/session/{id}/interrupt', server.interrupt)
+        app.router.add_post('/api/session/{id}/send', server.send)
         app.router.add_get('/api/session/{id}/preview', server.preview)
         note = self.root / 'note.md'
         note.write_text('# Safe preview')
@@ -125,6 +153,9 @@ class Controls(unittest.IsolatedAsyncioTestCase):
                 base = f'/api/session/{self.sid}'
                 r = await client.post(base+'/interrupt',json={},headers={'Origin':'https://untrusted.example'})
                 self.assertEqual(r.status,403)
+                r = await client.post(base+'/send',json={'images':[{}]})
+                self.assertEqual(r.status,400)
+                self.assertFalse(self.driver.running)
                 r = await client.post(base+'/permission/stale',json={'allow':'true'})
                 self.assertEqual(r.status,400)
                 r = await client.post(base+'/permission/stale',json={'allow':True})

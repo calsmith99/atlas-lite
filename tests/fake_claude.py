@@ -14,6 +14,10 @@ for raw in sys.stdin:
     e = json.loads(raw)
     if e['type'] == 'user':
         mode = e['message']['content']
+        if isinstance(mode, list):
+            emit({'type':'stream_event','event':{'delta':{'type':'text_delta','text':json.dumps(mode)}}})
+            result()
+            continue
         if mode in ('hold', 'ignore'):
             continue
         if mode in ('permission', 'question'):
