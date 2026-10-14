@@ -15,6 +15,8 @@ My notes, kept locally and edited in Obsidian. The point is to build up what is 
 
 If the sections below are still empty, this vault has no structure yet. Before other work, ask the user what they use Atlas for and which folders or repos it may read and write. Then design the folders and note shapes yourself to suit, and write them into this file under `## Folders` and `## Note shapes` (and `## Access` for the folders and repos it may touch), so later sessions follow them. Keep the folder set small, and update this file whenever the structure changes.
 
+**Code repos.** Atlas keeps its list of code repos in `atlas.local.json` in the Atlas install folder; the exact path is given in your session instructions. Format: `{"repos": ["/absolute/path/to/repo", "/another/repo"]}`. When the user names repos (or a folder of repos), write the absolute paths of the git repos there (read the file first and keep existing entries; create it if missing), and record them under `## Access` here. To add or remove one later, edit that list the same way; the code globe rebuilds by itself within seconds and new sessions get read access to each listed repo (an already-running session needs a new turn). Do not edit any other file outside the vault.
+
 ## Access
 
 _Not set up yet._

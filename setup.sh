@@ -19,7 +19,7 @@ if [ ! -x "$HERE/.venv-graphify/bin/python" ]; then
   python3 -m venv "$HERE/.venv-graphify"
 fi
 if "$HERE/.venv-graphify/bin/pip" install --quiet "graphifyy==0.9.90"; then
-  echo "Graphify ready in $HERE/.venv-graphify (set ATLAS_CODE_REPOS=/path/a:/path/b before ./run.sh for the code globe)"
+  echo "Graphify ready in $HERE/.venv-graphify"
 else
   echo "Warning: could not install graphifyy; the code globe will be unavailable until you re-run ./setup.sh." >&2
 fi
@@ -30,4 +30,35 @@ else
   mkdir -p "$(dirname "$VAULT")"
   cp -R "$HERE/vault-template" "$VAULT"
   echo "Created an empty vault at $VAULT; the first session asks what you use Atlas for and sets up its structure. In Obsidian use 'Open folder as vault' on it."
+fi
+
+# Code globe: which repos to show (saved in atlas.local.json, gitignored; Atlas can change it later on request).
+CONF="$HERE/atlas.local.json"
+if [ -e "$CONF" ]; then
+  echo "Repo list already saved in $CONF, leaving it alone."
+else
+  printf "Folder that holds your repos (Enter to skip): "
+  DIR=""
+  read -r DIR || true
+  case "$DIR" in "~"*) DIR="$HOME${DIR#\~}" ;; esac
+  if [ -n "$DIR" ] && [ -d "$DIR" ]; then
+    DIR="$(cd "$DIR" && pwd)"
+    json=""; n=0
+    for d in "$DIR"/*/; do
+      d="${d%/}"
+      if [ -e "$d/.git" ]; then
+        esc="$(printf '%s' "$d" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+        json="$json${json:+, }\"$esc\""
+        n=$((n + 1))
+      fi
+    done
+    if [ "$n" -gt 0 ]; then
+      printf '{"repos": [%s]}\n' "$json" > "$CONF"
+      echo "Saved $n repos to $CONF (edit it, or ask Atlas, to change the list)."
+    else
+      echo "No git repos found directly inside $DIR; nothing saved."
+    fi
+  elif [ -n "$DIR" ]; then
+    echo "No such folder: $DIR; skipping."
+  fi
 fi

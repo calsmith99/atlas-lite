@@ -14,6 +14,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,7 +23,8 @@ from aiohttp import web
 
 from addons import Addons
 from driver import Driver
-from graphs import build_sources
+from graphs import JsonFileSource, build_sources
+from repos import load_repos
 from sessions import Sessions
 
 ROOT = Path(__file__).resolve().parent
@@ -142,8 +145,43 @@ async def no_cache(request, handler):
     return resp
 
 
+CODE_CACHE = Path(os.environ.get("ATLAS_CODE_CACHE", ROOT / ".code-cache")).expanduser()
+CODE_POLL = float(os.environ.get("ATLAS_CODE_POLL", "3"))
+
+
+def build_code(repos: list[str]) -> bool:
+    script = ROOT / "scripts" / "build_code_graph.py"
+    try:
+        subprocess.run([sys.executable, str(script), "--cache", str(CODE_CACHE), *repos], check=True,
+                       stdout=subprocess.DEVNULL)
+        return True
+    except (subprocess.CalledProcessError, OSError) as e:
+        print("code graph build failed:", e, flush=True)
+        return False
+
+
+async def watch_code_repos():
+    """Rebuild the code graph in a thread whenever the configured repo list changes; requests never wait on it."""
+    if os.environ.get("ATLAS_CODE_GRAPH"):
+        return
+    done = None
+    while True:
+        repos = load_repos()
+        if repos != done:
+            if not repos:
+                sources.pop("code", None)
+                done = repos
+            elif await asyncio.to_thread(build_code, repos):
+                sources["code"] = JsonFileSource("code", "Code", CODE_CACHE / "code-graph.json")
+                done = repos
+                print(f"code graph ready: {len(repos)} repos", flush=True)
+            else:
+                done = repos      # don't retry a failing list until it changes
+        await asyncio.sleep(CODE_POLL)
+
+
 async def start_background(app):
-    app["tasks"] = [asyncio.create_task(sessions.run())]
+    app["tasks"] = [asyncio.create_task(sessions.run()), asyncio.create_task(watch_code_repos())]
 
 
 def main():

@@ -16,6 +16,8 @@ import time
 import uuid
 from pathlib import Path
 
+from repos import CONFIG, load_repos
+
 CONFLICT_SECS = 8      # a log written this recently, by someone else, means a terminal is driving it
 
 
@@ -30,7 +32,7 @@ class Driver:
         self.running: dict[str, asyncio.subprocess.Process] = {}
 
     def prompt(self) -> str:
-        base = (self.root / "prompts/session.md").read_text().replace("{vault}", str(self.vault))
+        base = (self.root / "prompts/session.md").read_text().replace("{vault}", str(self.vault)).replace("{config}", str(CONFIG))
         extra = self.addon_prompts()
         return base + ("\n\n" + extra if extra else "")
 
@@ -38,6 +40,8 @@ class Driver:
         cmd = [self.claude, "-p", "--input-format", "stream-json", "--output-format", "stream-json",
                "--verbose", "--include-partial-messages", "--permission-mode", self.mode,
                "--settings", str(self.root / "settings.json"), "--add-dir", str(self.vault),
+               *[a for r in load_repos() for a in ("--add-dir", r)],
+               "--allowedTools", f"Read(/{CONFIG})", f"Edit(/{CONFIG})", f"Write(/{CONFIG})",
                "--append-system-prompt", self.prompt(), "--session-id" if new else "--resume", sid]
         if self.model:
             cmd += ["--model", self.model]

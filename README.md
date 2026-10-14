@@ -14,6 +14,8 @@ Needs Python 3.10+ and [Claude Code](https://claude.com/claude-code) on your PAT
 ./run.sh        # http://localhost:11700
 ```
 
+`setup.sh` also asks once for the folder that holds your repos (Enter to skip) and saves the git repos directly inside it to `atlas.local.json` (gitignored; `{"repos": ["/abs/path"]}`). Edit that file, or ask Atlas, to add or remove repos: the server notices within seconds and rebuilds the code globe in the background, and each repo is given to Claude sessions with `--add-dir`. No environment variables are needed; `ATLAS_CODE_REPOS=/a:/b` still overrides the file if set.
+
 Setup never writes to `~/.claude` and never overwrites an existing vault. Per-session instructions
 (`prompts/session.md`) and settings (`settings.json`) go on each `claude` command line. Opening the page
 needs internet once for fonts, three.js and marked from CDNs.
@@ -21,7 +23,7 @@ needs internet once for fonts, three.js and marked from CDNs.
 Configuration is by environment variable: `ATLAS_VAULT` (default `~/Atlas Vault`), `ATLAS_PORT` (11700),
 `ATLAS_RECENT_HOURS` (6), `ATLAS_PERMISSION_MODE` (`acceptEdits`; a headless turn cannot ask, so tools beyond
 that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path to the binary),
-`ATLAS_CODE_GRAPH`, `ATLAS_CODE_REPOS`, `ATLAS_CODE_CACHE`, `ATLAS_VOICE`. The server listens on 127.0.0.1 only and rejects cross-site requests.
+`ATLAS_CODE_GRAPH`, `ATLAS_CODE_CACHE`, `ATLAS_VOICE` (optional; `ATLAS_CODE_REPOS` overrides the saved repo list). The server listens on 127.0.0.1 only and rejects cross-site requests.
 
 ## Using it
 
@@ -54,6 +56,6 @@ that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path
 appears behind the flip button. Nodes need `id` and may carry `name`, `folder`, `blurb`; links are
 `{"source": id, "target": id}`.
 
-`ATLAS_CODE_REPOS=/path/a:/path/b ./run.sh` (setup installs Graphify; with the variable unset the code globe is simply skipped; the first start builds the graph, later starts reuse it for a day) builds one combined code globe (repo = constellation, file = star, click a file for its functions) with `scripts/build_code_graph.py`; see [docs/graphify-test.md](docs/graphify-test.md).
+The repos in `atlas.local.json` (or `ATLAS_CODE_REPOS=/path/a:/path/b`; with neither, the code globe is skipped; the first build runs in the background, later ones reuse per-repo output for a day; reload the page to see a new globe) build one combined code globe (repo = constellation, file = star, click a file for its functions) with `scripts/build_code_graph.py`; see [docs/graphify-test.md](docs/graphify-test.md).
 
 `?graph=<id>` on the page URL opens a given graph first (e.g. `/?graph=code`).
