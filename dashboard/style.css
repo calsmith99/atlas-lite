@@ -174,8 +174,14 @@ pre code { background: none; padding: 0; color: inherit; }
 #session-cwd:empty { display: none; }
 
 /* session selector: one medallion per session, like the bedtime week's calorie medallions */
-#selector { padding: 8px 12px 6px; }
-#sessions { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 2px; scrollbar-width: thin; scrollbar-color: var(--gilt-dim) transparent; }
+#selector { padding: 0; }
+/* no container: medallions float; an edge fades only where more medallions are scrolled out of view */
+#sessions { --fl: 0px; --fr: 0px; display: flex; gap: 6px; overflow-x: auto; padding: 10px 4px 6px; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
+#sessions::-webkit-scrollbar { display: none; }
+#sessions.fade-l { --fl: 56px; }
+#sessions.fade-r { --fr: 56px; }
 .med { flex: none; width: 76px; cursor: pointer; text-align: center; user-select: none; background: none; border: 0; padding: 0; color: inherit; }
 .med svg { width: 66px; height: 66px; overflow: visible; display: block; margin: 0 auto; }
 .med .disc { stroke: var(--gilt-dim); stroke-width: 2.5; fill: url(#stone-dome); }
@@ -195,7 +201,7 @@ pre code { background: none; padding: 0; color: inherit; }
 .med.add .disc { fill: url(#stone-dome); stroke-dasharray: 4 4; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
-#popover { border-top: 1px solid rgba(201, 164, 92, .3); margin-top: 6px; padding-top: 8px; font-size: 15px; }
+#popover { background: var(--panel-bg); border: 1px solid var(--gilt-dim); backdrop-filter: blur(6px); margin-top: 6px; padding: 8px 12px; font-size: 15px; }
 #new-form { display: flex; gap: 8px; align-items: center; }
 #new-form label { flex: 1; display: flex; gap: 6px; align-items: center; color: var(--muted); white-space: nowrap; }
 #new-cwd { flex: 1; min-width: 0; font: 13px var(--mono); color: var(--ivory); background: rgba(0,0,0,.4); border: 1px solid var(--gilt-dim); padding: 3px 6px; }

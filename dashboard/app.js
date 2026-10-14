@@ -921,3 +921,19 @@ setInterval(async () => {                    // pick up new notes and links; kee
     }
   } catch {}
 }, 30000);
+
+// session strip: fade an edge only when medallions are scrolled past it; the wheel scrolls sideways
+{
+  const strip = $("#sessions");
+  const edges = () => {
+    const max = strip.scrollWidth - strip.clientWidth;
+    strip.classList.toggle("fade-l", strip.scrollLeft > 1);
+    strip.classList.toggle("fade-r", strip.scrollLeft < max - 1);
+  };
+  strip.addEventListener("scroll", edges, { passive: true });
+  strip.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { strip.scrollLeft += e.deltaY; e.preventDefault(); }
+  }, { passive: false });
+  new ResizeObserver(edges).observe(strip);
+  new MutationObserver(edges).observe(strip, { childList: true });
+}
