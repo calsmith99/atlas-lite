@@ -13,6 +13,8 @@ const TINT_FADE = 300;               // seconds for a touched note to fade from 
 const FOLDER_COLOURS = {
   Tickets: "#8fc0aa", Reference: "#f3dc9a", Research: "#f4ecd8", Logs: "#e0995a", Extras: "#a89274", "": "#ffe7a8",
 };
+const FALLBACK_COLOURS = ["#8fc0aa", "#f3dc9a", "#e0995a", "#9db4e8", "#d99ac5", "#b5d98a", "#e8b49d", "#9ad9d4"];
+const folderColour = (f) => FOLDER_COLOURS[f] ?? (f ? FALLBACK_COLOURS[hash(f) % FALLBACK_COLOURS.length] : FOLDER_COLOURS[""]);
 const TOUCH_COLOUR = new THREE.Color("#4f9dff");  // read or edited by Atlas
 
 const $ = (s) => document.querySelector(s);
@@ -324,7 +326,7 @@ function buildGraph(graph) {
   nodes.forEach((n, i) => {
     pos.set([n.p.x, n.p.y, n.p.z], i * 3);
     size[i] = 5 + Math.sqrt(n.deg) * 3.2;
-    const c = new THREE.Color(FOLDER_COLOURS[n.folder] ?? FOLDER_COLOURS[""]);
+    const c = new THREE.Color(folderColour(n.folder));
     col.set([c.r, c.g, c.b], i * 3);
     seed[i] = (hash(n.id) % 1000) / 1000;
   });
@@ -907,7 +909,7 @@ resize();
 config = await (await fetch("/api/config")).json();
 $("#flip").classList.toggle("single", (config.graphs || []).length < 2);
 $("#flip").title = (config.graphs || []).length < 2 ? "Only the notes graph is registered (see README: pluggable graph sources)" : "Flip the globe to the next graph";
-await loadGraph("notes");
+await loadGraph(new URLSearchParams(location.search).get("graph") || "notes");
 connect();
 frame();
 loadExtensions();

@@ -4,9 +4,9 @@ The globe shows one graph at a time and the page can flip between sources. A sou
 `id`, `label`, and `load() -> {"nodes": [...], "links": [...]}`. Nodes need `id`, `name`; they may carry
 `folder` (colour group), `tags`, `blurb`. Links are `{"source": id, "target": id}`.
 
-Registered here: the notes vault (always) and an optional code graph read from a JSON file in the same shape
-(`ATLAS_CODE_GRAPH=/path/graph.json`), which is where Graphify output will plug in later. Add a source by
-subclassing GraphSource and adding it in `build_sources()`.
+Registered here: the notes vault (always) and an optional code graph read from a JSON file
+(`ATLAS_CODE_GRAPH=/path/graph.json`): either the shape above, or Graphify's `graph.json` (see docs/graphify-test.md),
+which is recognised and mapped automatically. Add a source by subclassing GraphSource and adding it in `build_sources()`.
 """
 from __future__ import annotations
 
@@ -97,19 +97,50 @@ class NotesSource(GraphSource):
 
 
 class JsonFileSource(GraphSource):
-    """A graph precomputed into a JSON file (`{"nodes": [...], "links": [...]}`), e.g. a code graph."""
+    """A graph precomputed into a JSON file, e.g. a code graph. Takes `{"nodes": [...], "links": [...]}` as is,
+    or Graphify output (nodes with `label` and `source_file`, a `community` number, edges with a `relation`)."""
 
     def __init__(self, id: str, label: str, path: Path):
         self.id, self.label, self.path = id, label, path
+        self.stamp = None
+        self.graph = {"nodes": [], "links": []}
+
+    @staticmethod
+    def _group(source_file: str) -> str:
+        """Colour group for a code node: the first two folders of its file, e.g. `apps/api`."""
+        parts = source_file.split("/")
+        return "/".join(parts[:2]) if len(parts) > 2 else parts[0] if len(parts) > 1 else ""
+
+    def _from_graphify(self, g: dict) -> dict:
+        nodes = []
+        for n in g["nodes"]:
+            where = n.get("source_file", "")
+            loc = n.get("source_location", "")
+            nodes.append({"id": n["id"], "name": n.get("label") or n["id"], "folder": self._group(where),
+                          "tags": [f"community-{n['community']}"] if "community" in n else [],
+                          "blurb": f"{where} {loc}".strip()[:200]})
+        ids = {n["id"] for n in nodes}
+        links = set()
+        for e in g["links"]:
+            a, b = e["source"], e["target"]
+            if a != b and a in ids and b in ids:
+                links.add(tuple(sorted((a, b))))
+        return {"nodes": nodes, "links": [{"source": a, "target": b} for a, b in sorted(links)]}
 
     def load(self) -> dict:
+        stamp = self.path.stat().st_mtime
+        if stamp == self.stamp:
+            return self.graph
         g = json.loads(self.path.read_text())
         g.setdefault("nodes", [])
         g.setdefault("links", [])
+        if g["nodes"] and "source_file" in g["nodes"][0]:
+            g = self._from_graphify(g)
         for n in g["nodes"]:
             n.setdefault("name", str(n["id"]).split("/")[-1])
             n.setdefault("folder", "")
         g.setdefault("vault", self.label)
+        self.stamp, self.graph = stamp, g
         return g
 
 

@@ -3,16 +3,6 @@ tags: [hub]
 status: active
 ---
 
-_Front door of the vault: where tickets, features and services start._
+_Front door of the vault: a map of the folders and what lives in them._
 
-## Tickets
-
-Open investigations live in `Tickets/`, one per ticket.
-
-## Reference
-
-Features, services, data and people in `Reference/`.
-
-## Logs
-
-Daily notes and incidents in `Logs/`.
+Nothing here yet. The first session sets up the structure (see `CLAUDE.md`) and lists it here.

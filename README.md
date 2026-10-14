@@ -10,7 +10,7 @@ session you can `claude --resume <id>` in a terminal.
 Needs Python 3.10+ and [Claude Code](https://claude.com/claude-code) on your PATH, already logged in.
 
 ```sh
-./setup.sh      # creates .venv and, if absent, the vault from vault-template/
+./setup.sh      # creates .venv and, if absent, an empty vault from vault-template/
 ./run.sh        # http://localhost:11700
 ```
 
@@ -45,11 +45,13 @@ that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path
 | `addons.py`, `addons/` | add-on loader and [convention](addons/README.md) |
 | `voice/` | optional [voice hook](voice/README.md) |
 | `dashboard/` | the page |
-| `vault-template/` | starting vault copied by `setup.sh` |
+| `vault-template/` | neutral starting vault copied by `setup.sh`: general rules only, no folders. The first session asks what you use Atlas for and designs the structure into its `CLAUDE.md` |
 
 ## Graph sources
 
 `graphs.py` defines `GraphSource` (`id`, `label`, `load() -> {"nodes": [...], "links": [...]}`). Point
-`ATLAS_CODE_GRAPH` at a JSON file of that shape (a Graphify export can be converted to it) and a second globe
+`ATLAS_CODE_GRAPH` at a JSON file of that shape (or a Graphify `graph.json`, which is mapped automatically; see [docs/graphify-test.md](docs/graphify-test.md)) and a second globe
 appears behind the flip button. Nodes need `id` and may carry `name`, `folder`, `blurb`; links are
 `{"source": id, "target": id}`.
+
+`?graph=<id>` on the page URL opens a given graph first (e.g. `/?graph=code`).

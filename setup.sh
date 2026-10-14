@@ -19,7 +19,5 @@ if [ -e "$VAULT" ]; then
 else
   mkdir -p "$(dirname "$VAULT")"
   cp -R "$HERE/vault-template" "$VAULT"
-  find "$VAULT" -name .keep -delete
-  mkdir -p "$VAULT/Logs" "$VAULT/Reference" "$VAULT/Tickets"
-  echo "Created the vault at $VAULT. In Obsidian use 'Open folder as vault' on it."
+  echo "Created an empty vault at $VAULT; the first session asks what you use Atlas for and sets up its structure. In Obsidian use 'Open folder as vault' on it."
 fi
