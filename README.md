@@ -10,7 +10,7 @@ session you can `claude --resume <id>` in a terminal.
 Needs Python 3.10+ and [Claude Code](https://claude.com/claude-code) on your PATH, already logged in.
 
 ```sh
-./setup.sh      # creates .venv and, if absent, an empty vault from vault-template/
+./setup.sh      # creates .venv, .venv-graphify (graphifyy 0.9.90) and, if absent, an empty vault from vault-template/
 ./run.sh        # http://localhost:11700
 ```
 
@@ -54,6 +54,6 @@ that mode are refused), `ATLAS_DEFAULT_CWD`, `ATLAS_MODEL`, `ATLAS_CLAUDE` (path
 appears behind the flip button. Nodes need `id` and may carry `name`, `folder`, `blurb`; links are
 `{"source": id, "target": id}`.
 
-`ATLAS_CODE_REPOS=/path/a:/path/b` builds one combined code globe (repo = constellation, file = star, click a file for its functions) with `scripts/build_code_graph.py`; see [docs/graphify-test.md](docs/graphify-test.md).
+`ATLAS_CODE_REPOS=/path/a:/path/b ./run.sh` (setup installs Graphify; with the variable unset the code globe is simply skipped; the first start builds the graph, later starts reuse it for a day) builds one combined code globe (repo = constellation, file = star, click a file for its functions) with `scripts/build_code_graph.py`; see [docs/graphify-test.md](docs/graphify-test.md).
 
 `?graph=<id>` on the page URL opens a given graph first (e.g. `/?graph=code`).
