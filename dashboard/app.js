@@ -1,5 +1,6 @@
 // Work Atlas dashboard: the work vault as a celestial globe, plus the live conversation of every Claude
 // session on this machine, fed by one WebSocket from dashboard.py. Any session that reads or edits a note lights it.
+import { WorkControls, post } from "./controls.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
@@ -512,9 +513,9 @@ function resize(animate = false) {
     return;
   }
   viewY = 0;
-  // centre the globe in the space right of the conversation
+  // Centre the globe between the conversation and activity panels.
   const left = $("#left").offsetWidth + 16;
-  const right = 0;
+  const right = $("#right").offsetWidth + 16;
   viewTarget = -(left - right) / 2;
   if (!animate || viewX === null) viewX = viewTarget;
   applyView();
@@ -641,7 +642,7 @@ function addEntry(e, live, touchNotes = true) {
     div.innerHTML = `<span class="who"></span><div class="body"></div>`;
     div.querySelector(".who").textContent = who;
     const body = div.querySelector(".body");
-    if (e.kind === "claude") body.innerHTML = md(e.text);
+    if (e.kind === "claude") { body.innerHTML = md(e.text); work.decorate(body, live); }
     else { body.textContent = e.text; body.style.display = "inline"; }
     entriesEl.append(div);
   } else if (e.kind === "tool") {
@@ -686,6 +687,8 @@ tick();
 // The conversation shows one: the latest working one until you pick one, which pins it.
 const sessions = new Map();                  // id -> meta {id, title, cwd, last, working, driving}
 let shown = null, pinned = false, config = {};
+const submitting = new Set();
+const work = new WorkControls({session: () => shown, meta: () => sessions.get(shown), error: showError, markdown: md});
 
 function ago(t) {
   const s = Date.now() / 1000 - t;
@@ -725,11 +728,13 @@ function syncComposer() {
   const m = sessions.get(shown);
   const other = m && m.working && !m.driving;
   const busy = m && m.driving;
-  $("#draft").disabled = $("#send").disabled = !m || busy || other;
-  $("#draft").placeholder = !m ? "Start a session below, or pick one" : busy ? "Claude is working…" : other ? "Another process is driving this session" : "Write to Claude";
+  $("#draft").disabled = !m || other || !work.connected;
+  $("#send").disabled = $("#draft").disabled || submitting.has(shown);
+  $("#draft").placeholder = !m ? "Start a session below, or pick one" : busy ? "Type a correction to stop and redirect Claude…" : other ? "Another process is driving this session" : "Write to Claude";
   const note = $("#driver-note");
   note.hidden = !(busy || other);
-  note.textContent = busy ? "replying" : "driven elsewhere";
+  note.textContent = busy ? "working · corrections interrupt" : "driven elsewhere";
+  work.render();
 }
 
 const streamEl = () => entriesEl.querySelector(".entry.streaming");
@@ -748,6 +753,7 @@ function delta(text) {
 }
 
 async function show(id) {
+  if (shown !== id) work.closePreview();
   shown = id;
   renderSessions();
   const m = sessions.get(id);
@@ -759,6 +765,7 @@ async function show(id) {
     const r = await (await fetch(`/api/session/${id}`)).json();
     if (shown !== id) return;
     r.history.forEach((e) => addEntry(e, false, false));
+    work.restore(r.runtime);
   } catch {}
 }
 
@@ -825,18 +832,20 @@ function showError(text) {
 }
 
 async function sendText(text) {
-  if (!shown || !text.trim()) return;
+  if (!shown || !text.trim() || submitting.has(shown)) return false;
   showError("");
-  const r = await fetch(`/api/session/${shown}/send`, { method: "POST", body: JSON.stringify({ text }) });
-  if (!r.ok) return showError((await r.json()).error);
-  const m = sessions.get(shown);
-  if (m) { m.driving = m.working = true; renderSessions(); }
+  const sid = shown, m = sessions.get(sid);
+  submitting.add(sid); syncComposer();
+  try {
+    await post(`/api/session/${sid}/${m?.driving ? 'interrupt' : 'send'}`, {text});
+    return true;
+  } catch(e) { showError(e.message); return false; }
+  finally { submitting.delete(sid); syncComposer(); }
 }
-$("#composer").addEventListener("submit", (ev) => {
+$("#composer").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const t = $("#draft").value;
-  $("#draft").value = "";
-  sendText(t);
+  const text = $("#draft").value;
+  if (await sendText(text)) { if ($("#draft").value === text) $("#draft").value = ""; }
 });
 $("#draft").addEventListener("keydown", (ev) => {
   if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("#composer").requestSubmit(); }
@@ -880,7 +889,7 @@ renderer.domElement.addEventListener("click", (e) => {
 const listeners = new Map();
 const on = (ev, fn) => listeners.set(ev, [...(listeners.get(ev) || []), fn]);
 const emit = (ev, data) => (listeners.get(ev) || []).forEach((fn) => { try { fn(data); } catch (e) { console.error(e); } });
-const api = { on, send: sendText, session: () => shown, touch: (ids, act = "read") => touch(ids, act, true) };
+const api = { on, send: sendText, status: ({listening = false} = {}) => { work.listening = listening; work.render(); }, session: () => shown, touch: (ids, act = "read") => touch(ids, act, true) };
 
 async function loadExtensions() {
   for (const a of config.addons || []) {
@@ -897,6 +906,7 @@ async function loadExtensions() {
     try {
       const v = await import("/voice/hook.js");
       v.init?.(api);
+      work.voice = true; work.render();
       if (v.toggle) { $("#mic").hidden = false; $("#mic").addEventListener("click", () => v.toggle()); }
     } catch (e) { console.error("voice hook", e); }
   }
@@ -926,8 +936,11 @@ function connect() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
+    if (["status", "permission", "permission_done", "usage"].includes(m.t)) work.event(m);
     switch (m.t) {
       case "hello":
+        work.connection(true);
+        work.restore(m.runtime);
         heat.fill(0); ember.fill(0); tint.fill(0);
         if (graphId === "notes") m.touches.forEach((t) => touch(t.notes, t.act, false, t.ts));
         sessions.clear();
@@ -950,7 +963,8 @@ function connect() {
         break;
     }
   };
-  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onclose = () => { work.connection(false); syncComposer(); setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
 }
 
 resize();

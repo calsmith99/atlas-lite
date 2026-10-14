@@ -20,6 +20,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   background: radial-gradient(ellipse at 50% 45%, #2a1a0d 0%, #140c06 45%, var(--ink) 100%);
@@ -150,7 +151,6 @@ pre code { background: none; padding: 0; color: inherit; }
 }
 
 
-[hidden] { display: none !important; }
 .linkish { border: 0; padding: 0; color: var(--muted); font-style: italic; text-decoration: underline dotted; font-size: 14px; }
 .linkish:hover { color: var(--gilt); }
 
@@ -218,3 +218,61 @@ pre code { background: none; padding: 0; color: inherit; }
 #flip.turning .flip-glyph { transform: rotate(360deg); }
 #addons { position: fixed; right: 16px; bottom: 16px; width: min(26vw, 380px); display: flex; flex-direction: column; gap: 12px; }
 #addons:empty { display: none; }
+
+/* Shared review frame: conversation stays available while reviewing an answer or file. */
+:root { --right-w: min(22vw, 300px); }
+#right { z-index: 2; position: fixed; top: 76px; right: 16px; width: var(--right-w); display: flex; flex-direction: column; gap: 16px; max-height: calc(100vh - 100px); overflow-y: auto; }
+#activity h2, #usage-panel h2 { margin-bottom: 10px; }
+#connection, #input-state { font-size: 14px; color: var(--muted); margin: 5px 0; }
+#task-state { color: var(--ivory); margin: 10px 0; overflow-wrap: anywhere; }
+#open-file { margin-top: 4px; }
+.error { color: #e78e75 !important; }
+#stop { border-color: var(--vermilion); color: #eaa58e; }
+#preview { position: fixed; left: calc(40px + var(--left-w)); right: calc(40px + var(--right-w)); top: 124px; bottom: 28px; display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; z-index: 4; pointer-events: none; }
+#preview > section { pointer-events: auto; min-height: 0; max-height: 100%; overflow: auto; }
+#artifact { flex: 1; display: flex; flex-direction: column; }
+#artifact .panel-head { flex: none; gap: 8px; }
+#artifact-title { font-size: 23px; overflow-wrap: anywhere; }
+#artifact-body { overflow: auto; min-height: 0; flex: 1; }
+#artifact-body img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: auto; }
+#artifact-body iframe { width: 100%; min-height: 50vh; border: 0; background: white; }
+#artifact-body pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#artifact-body a { color: var(--gilt-bright); }
+#decision { flex: 0 1 auto; max-height: 65%; }
+#decision:only-child { max-height: 100%; }
+#decision fieldset { border: 1px solid var(--gilt-dim); margin: 12px 0; padding: 8px; }
+#decision legend { color: var(--ivory); }
+.choice { display: flex; align-items: start; gap: 6px; margin: 8px 0; font-size: 15px; }
+.choice:has(textarea) { flex-direction: column; }
+.choice textarea { width: 100%; }
+#decision pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.decision-buttons { display: flex; gap: 10px; margin-top: 12px; }
+.command-block { margin: 12px 0; }
+.command-block > span { color: var(--muted); }
+.command-block > button { float: right; }
+.copy-blocks { font-size: 14px; margin: 6px 0; }
+.file-form label { display: flex; flex-direction: column; gap: 8px; }
+.file-form input, .choice textarea { font: 13px var(--mono); color: var(--ivory); background: rgba(0,0,0,.5); border: 1px solid var(--gilt-dim); padding: 8px; }
+.file-form button { margin-top: 10px; }
+.usage-row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; margin-top: 10px; }
+#usage progress { display: block; width: 100%; height: 6px; margin: 7px 0; accent-color: var(--gilt); }
+#usage small { display: block; font-size: 12px; color: var(--muted); }
+.usage-detail { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--gilt-dim); color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 1100px) and (min-width: 821px) {
+  :root { --left-w: 38vw; --right-w: 210px; }
+  #preview { left: calc(24px + var(--left-w)); right: calc(24px + var(--right-w)); }
+  #title { left: 53%; }
+  #title h1 { font-size: 34px; }
+}
+@media (max-width: 820px) {
+  body { overflow-y: auto; }
+  #title { position: relative; top: auto; left: auto; transform: none; padding: 12px 55px; }
+  #left { position: relative; inset: auto; width: auto; margin: 16px; min-height: 440px; }
+  #right { position: relative; top: auto; right: auto; width: auto; margin: 16px; max-height: none; }
+  #preview { position: relative; inset: auto; margin: 16px; max-height: none; z-index: 4; }
+  #preview > section, #decision { max-height: 75vh; }
+  #artifact { min-height: 300px; }
+  #composer { flex-wrap: wrap; }
+  #draft { flex-basis: 100%; }
+  #left { height: 85vh; }
+}

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import os
 import subprocess
 import sys
@@ -59,7 +60,7 @@ async def ws_handler(request):
         raise web.HTTPForbidden()
     ws = web.WebSocketResponse(heartbeat=30, compress=False)
     await ws.prepare(request)
-    await ws.send_str(json.dumps({"t": "hello", "sessions": sessions.recent(), "touches": sessions.touches()}))
+    await ws.send_str(json.dumps({"t": "hello", "sessions": sessions.recent(), "touches": sessions.touches(), "runtime": driver.snapshot()}))
     clients.add(ws)
     try:
         async for _ in ws:
@@ -90,9 +91,9 @@ async def session(request):
     s = sessions.all.get(sid)
     if not s:
         if sid in sessions.pending:
-            return web.json_response({"session": sessions.pending[sid], "history": []})
+            return web.json_response({"session": sessions.pending[sid], "history": [], "runtime": driver.snapshot()})
         raise web.HTTPNotFound()
-    return web.json_response({"session": s.meta(), "history": s.history})
+    return web.json_response({"session": s.meta(), "history": s.history, "runtime": driver.snapshot()})
 
 
 async def older(request):
@@ -132,6 +133,76 @@ async def send(request):
     except RuntimeError as e:
         return web.json_response({"error": str(e)}, status=409)
     return web.json_response({"ok": True})
+
+
+async def interrupt(request):
+    if not same_origin(request):
+        raise web.HTTPForbidden()
+    body = await request.json() if request.can_read_body else {}
+    correction = body.get("text", "") if isinstance(body, dict) else None
+    if not isinstance(correction, str) or len(correction) > 100000:
+        raise web.HTTPBadRequest(text="Invalid correction")
+    try:
+        await driver.interrupt(request.match_info["id"], correction.strip())
+    except (RuntimeError, OSError) as e:
+        return web.json_response({"error": str(e)}, status=409)
+    return web.json_response({"ok": True})
+
+
+async def answer(request):
+    if not same_origin(request):
+        raise web.HTTPForbidden()
+    body = await request.json()
+    if not isinstance(body, dict) or not isinstance(body.get("allow"), bool):
+        raise web.HTTPBadRequest(text="An explicit allow or deny answer is required")
+    try:
+        await driver.answer(request.match_info["id"], request.match_info["rid"], body["allow"], body.get("answers"))
+    except (RuntimeError, OSError) as e:
+        return web.json_response({"error": str(e)}, status=409)
+    return web.json_response({"ok": True})
+
+
+def preview_path(sid, raw):
+    s = sessions.all.get(sid)
+    pending = sessions.pending.get(sid)
+    cwd = Path(s.cwd if s and s.cwd else pending["cwd"] if pending else VAULT).resolve()
+    roots = [VAULT.resolve(), cwd, *[Path(r).resolve() for r in load_repos()]]
+    p = Path(raw).expanduser()
+    p = (p if p.is_absolute() else cwd / p).resolve()
+    if not any(p.is_relative_to(r) for r in roots):
+        raise web.HTTPForbidden(text="This file is outside the session's project and vault")
+    if not p.is_file():
+        raise web.HTTPNotFound(text="File not found")
+    if p.stat().st_size > 32 * 1024 * 1024:
+        raise web.HTTPRequestEntityTooLarge(max_size=32 * 1024 * 1024, actual_size=p.stat().st_size)
+    return p
+
+
+async def preview(request):
+    if not same_origin(request):
+        raise web.HTTPForbidden()
+    sid, raw = request.match_info["id"], request.query.get("path", "")
+    if not raw or (sid not in sessions.all and sid not in sessions.pending):
+        raise web.HTTPBadRequest(text="Choose a session and file")
+    p = preview_path(sid, raw)
+    mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+    if request.query.get("raw") == "1":
+        if mime not in ("image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"):
+            mime = "application/octet-stream"
+        resp = web.FileResponse(p)
+        resp.content_type = mime
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
+        return resp
+    if mime in ("image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"):
+        return web.json_response({"name": p.name, "path": str(p), "kind": "pdf" if mime == "application/pdf" else "image"})
+    if p.stat().st_size > 1024 * 1024:
+        raise web.HTTPBadRequest(text="Text preview is limited to 1 MB")
+    try:
+        text = p.read_text(encoding="utf-8")
+    except UnicodeError:
+        raise web.HTTPBadRequest(text="This file type cannot be previewed")
+    return web.json_response({"name": p.name, "path": str(p), "kind": "markdown" if p.suffix.lower() == ".md" else "text", "text": text})
 
 
 async def index(request):
@@ -180,6 +251,13 @@ async def watch_code_repos():
         await asyncio.sleep(CODE_POLL)
 
 
+async def cleanup(app):
+    for task in app.get("tasks", []):
+        task.cancel()
+    await asyncio.gather(*app.get("tasks", []), return_exceptions=True)
+    await driver.close()
+
+
 async def start_background(app):
     app["tasks"] = [asyncio.create_task(sessions.run()), asyncio.create_task(watch_code_repos())]
 
@@ -197,6 +275,9 @@ def main():
     app.router.add_post("/api/sessions/new", new_session)
     app.router.add_post("/api/session/{id}/adopt", adopt)
     app.router.add_post("/api/session/{id}/send", send)
+    app.router.add_post("/api/session/{id}/interrupt", interrupt)
+    app.router.add_post("/api/session/{id}/permission/{rid}", answer)
+    app.router.add_get("/api/session/{id}/preview", preview)
     app.router.add_static("/static/", STATIC)
     (ROOT / "addons").mkdir(exist_ok=True)
     app.router.add_static("/addons/", ROOT / "addons")
@@ -204,6 +285,7 @@ def main():
     app.router.add_static("/voice/", ROOT / "voice")
     addons.setup(app, {"vault": VAULT, "broadcast": broadcast, "sessions": sessions, "root": ROOT})
     app.on_startup.append(start_background)
+    app.on_cleanup.append(cleanup)
     web.run_app(app, host="127.0.0.1", port=PORT,
                 print=lambda *_: print(f"Atlas baseline on http://localhost:{PORT} · vault {VAULT}", flush=True))
 

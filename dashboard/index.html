@@ -39,6 +39,7 @@
     <form id="composer" autocomplete="off">
       <textarea id="draft" rows="2" placeholder="Start a session below, or pick one" disabled></textarea>
       <button id="send" type="submit" disabled>Send</button>
+      <button id="stop" type="button" hidden>Stop</button>
       <button id="mic" type="button" hidden title="Voice">&#127908;</button>
     </form>
     <div id="composer-error" hidden></div>
@@ -56,6 +57,22 @@
   </section>
 </div>
 
+<aside id="right">
+  <section class="panel" id="activity" aria-live="polite">
+    <h2>Atlas</h2><div id="connection">Connecting…</div>
+    <div id="input-state">Typed input · Voice off</div>
+    <div id="task-state">Choose a conversation</div>
+    <button id="open-file" type="button">Preview file</button>
+  </section>
+  <section class="panel" id="usage-panel"><h2>Usage</h2><div id="usage"></div></section>
+</aside>
+<main id="preview" hidden>
+  <section id="artifact" class="panel" hidden>
+    <div class="panel-head"><h2 id="artifact-title">Preview</h2><button id="close-preview" type="button">Close</button></div>
+    <div id="artifact-body"></div>
+  </section>
+  <section id="decision" class="panel" aria-live="polite" hidden></section>
+</main>
 <div id="addons"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">

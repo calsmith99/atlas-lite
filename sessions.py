@@ -90,9 +90,10 @@ class Session:
         self.last = path.stat().st_mtime
         self.open = False          # the last entry leaves the turn unfinished (a user message or a tool call)
         self.driving = False       # the dashboard's own driver is running a turn on it
+        self.managed = False       # its persistent driver owns idle/working state
 
     def meta(self) -> dict:
-        working = self.driving or (self.open and time.time() - self.last < WORKING_SECS)
+        working = self.driving or (not self.managed and self.open and time.time() - self.last < WORKING_SECS)
         return {"id": self.id, "title": self.title or self.first or self.id[:8], "cwd": self.cwd,
                 "last": self.last, "working": working, "driving": self.driving}
 
@@ -153,8 +154,8 @@ class Sessions:
         return None
 
     def add_pending(self, sid: str, cwd: str) -> dict:
-        m = {"id": sid, "title": "New session", "cwd": cwd, "last": time.time(), "working": True,
-             "driving": True, "pending": True}
+        m = {"id": sid, "title": "New session", "cwd": cwd, "last": time.time(), "working": False,
+             "driving": False, "pending": True}
         self.pending[sid] = m
         self.broadcast({"t": "session", "session": m})
         return m
@@ -170,7 +171,10 @@ class Sessions:
 
     def _follow(self, path: Path) -> Session:
         s = self.all[path.stem] = Session(path, self.notes_of(), self.broadcast)
-        self.pending.pop(path.stem, None)
+        pending = self.pending.pop(path.stem, None)
+        if pending:
+            s.driving = pending.get("driving", False)
+            s.managed = pending.get("managed", False)
         asyncio.create_task(self.follow(s))
         return s
 
