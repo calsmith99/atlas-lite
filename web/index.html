@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="/theme.css" id="theme">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<div id="globe"></div>
+<div id="tip" hidden></div>
+
+<header id="top">
+  <h1 id="name" title="Click to rename" tabindex="0">Atlas</h1>
+</header>
+
+<main id="chat" class="card">
+  <div id="log" aria-live="polite"></div>
+  <form id="composer">
+    <textarea id="input" rows="1" placeholder="Message" autocomplete="off"></textarea>
+    <button type="submit" id="send">Send</button>
+    <button type="button" id="stop" hidden>Stop</button>
+  </form>
+  <div id="model-row" class="model-row" title="Applies from your next message"><select id="model-pick" aria-label="Model"></select><select id="effort-pick" aria-label="Effort"></select><select id="mode-pick" aria-label="Permissions"></select></div>
+  <div id="sessions" aria-label="Sessions"></div>
+  <label id="voice-row" class="muted" hidden><input type="checkbox" id="speak"> Read replies aloud</label>
+</main>
+
+<aside id="side">
+  <section id="state-panel" class="card" tabindex="0" role="button">
+    <div class="medallion"><div class="ring"></div><div id="state-word">Ready</div></div>
+    <div><div id="state-hint">Type a message</div><div id="state-detail"></div></div>
+  </section>
+  <section id="usage" class="card">
+    <h2 id="usage-title">Usage</h2>
+    <div id="usage-body"><p class="muted">Shown after your first message.</p></div>
+  </section>
+</aside>
+
+<section id="ask" class="card" hidden role="alertdialog" aria-labelledby="ask-title">
+  <h2 id="ask-title"></h2>
+  <div id="ask-why" class="muted"></div>
+  <pre id="ask-detail"></pre>
+  <div id="ask-actions">
+    <button id="ask-deny" type="button">Deny</button>
+    <button id="ask-always" type="button"></button>
+    <button id="ask-allow" type="button">Allow</button>
+  </div>
+  <div id="ask-more" class="muted"></div>
+</section>
+
+<section id="preview" class="card" hidden>
+  <header>
+    <div><h2 id="preview-title"></h2><div id="preview-path" class="muted"></div></div>
+    <div class="preview-actions"><button id="preview-close" type="button">Back to globe</button></div>
+  </header>
+  <div id="preview-body" class="md"></div>
+</section>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
